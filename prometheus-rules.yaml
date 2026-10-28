@@ -1,0 +1,59 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: robot-shop-slo
+  namespace: monitoring
+  labels:
+    release: kube-prom
+spec:
+  groups:
+  - name: robot-shop.rules
+    interval: 30s
+    rules:
+    # Alert: High error rate (>1% of requests are 5xx)
+    - alert: HighErrorRate
+      expr: |
+        sum(rate(http_requests_total{namespace="robot-shop",status=~"5.."}[5m]))
+        /
+        sum(rate(http_requests_total{namespace="robot-shop"}[5m])) > 0.01
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Error rate > 1%"
+        description: "Robot Shop error rate is {{ $value | humanizePercentage }}"
+
+    # Alert: High latency (p95 > 500ms)
+    - alert: HighLatency
+      expr: |
+        histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{namespace="robot-shop"}[5m])) > 0.5
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "p95 latency > 500ms"
+        description: "p95 latency is {{ $value | humanizeDuration }}"
+
+    # Alert: Pod down
+    - alert: RobotShopPodDown
+      expr: |
+        kube_pod_status_ready{namespace="robot-shop", condition="true"} == 0
+      for: 1m
+      labels:
+        severity: critical
+      annotations:
+        summary: "Robot Shop pod {{ $labels.pod }} is down"
+        description: "Pod {{ $labels.pod }} in namespace robot-shop has been down for more than 1 minute"
+
+    # Alert: High memory usage (>80% of limit)
+    - alert: HighMemoryUsage
+      expr: |
+        container_memory_usage_bytes{namespace="robot-shop"}
+        /
+        container_spec_memory_limit_bytes{namespace="robot-shop"} > 0.8
+      for: 5m
+      labels:
+        severity: warning
+      annotations:
+        summary: "High memory usage in {{ $labels.pod }}"
+        description: "Memory usage is {{ $value | humanizePercentage }} of limit"

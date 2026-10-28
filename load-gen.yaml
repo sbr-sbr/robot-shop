@@ -1,0 +1,26 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: load-gen
+  namespace: robot-shop
+spec:
+  parallelism: 3
+  completions: 3
+  template:
+    spec:
+      containers:
+      - name: load-gen
+        image: curlimages/curl:latest
+        command: ["/bin/sh", "-c"]
+        args:
+          - |
+            while true; do
+              curl -s http://web:8080/ > /dev/null
+              curl -s http://web:8080/catalogue > /dev/null
+              curl -s http://web:8080/user/login -X POST \
+                -H "Content-Type: application/json" \
+                -d '{"name":"user","password":"password"}' > /dev/null
+              sleep 1
+            done
+      restartPolicy: Never
+  backoffLimit: 2
